@@ -18,6 +18,7 @@ namespace WeatherProbe
     [BepInDependency("com.sigurd.csync")]
     [BepInDependency("evaisa.lethallib")]
     [BepInDependency("WhiteSpike.InteractiveTerminalAPI")]
+    [BepInDependency("mrov.WeatherRegistry", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
         internal static readonly Harmony harmony = new(Metadata.GUID);

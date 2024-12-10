@@ -34,9 +34,16 @@ namespace WeatherProbe.Misc
         {
             SelectableLevel[] availableLevels = StartOfRound.Instance.levels;
             SelectableLevel selectedLevel = availableLevels.First(x => x.PlanetName.Contains(level));
+
+            probedWeathers[selectedLevel.PlanetName] = selectedWeather;
+            if(WeatherRegistryPatches.IsModPresent){
+                // if weatherregistry is present, don't use probe's syncing
+                WeatherRegistryPatches.SetWeatherOnHost(selectedLevel, selectedWeather);
+                return;
+            }
+
             if (selectedLevel.overrideWeather) selectedLevel.overrideWeatherType = selectedWeather;
             else selectedLevel.currentWeather = selectedWeather;
-            probedWeathers[selectedLevel.PlanetName] = selectedWeather;
             if (selectedLevel == StartOfRound.Instance.currentLevel) StartOfRound.Instance.SetMapScreenInfoToCurrentLevel();
         }
         [ServerRpc(RequireOwnership = false)]
