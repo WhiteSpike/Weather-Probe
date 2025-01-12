@@ -69,7 +69,7 @@ namespace WeatherProbe.Misc.UI.Application
                         },
                         new TextElement()
                         {
-                            Text = string.Format(Constants.CURRENT_WEATHER_FORMAT, level.currentWeather == LevelWeatherType.None ? "Clear" : level.currentWeather)
+                            Text = string.Format(Constants.CURRENT_WEATHER_FORMAT, level.overrideWeather ? level.overrideWeatherType : (level.currentWeather == LevelWeatherType.None ? "Clear" : level.currentWeather))
                         },
                         new TextElement()
                         {
@@ -141,7 +141,7 @@ namespace WeatherProbe.Misc.UI.Application
             int groupCredits = Tools.GetTerminal().groupCredits;
             if (price > groupCredits) return false;
 
-            bool sameWeather = level.currentWeather == levelWeatherType || (level.overrideWeather && level.overrideWeatherType == levelWeatherType);
+            bool sameWeather = level.overrideWeather ? level.overrideWeatherType == levelWeatherType : level.currentWeather == levelWeatherType;
             return !sameWeather;
         }
         void BeforeChangeWeather(SelectableLevel level, LevelWeatherType type)
@@ -153,7 +153,7 @@ namespace WeatherProbe.Misc.UI.Application
                 return;
             }
 
-            bool sameWeather = level.currentWeather == type || (level.overrideWeather && level.overrideWeatherType == type);
+            bool sameWeather = level.overrideWeather ? level.overrideWeatherType == type : level.currentWeather == type;
             if (sameWeather)
             {
                 ErrorMessage(level.PlanetName, PreviousScreen(), string.Format(Constants.SAME_WEATHER_FORMAT, level.PlanetName, type == LevelWeatherType.None ? "clear" : type));
