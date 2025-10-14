@@ -11,6 +11,10 @@ namespace WeatherProbe.Misc.UI.Application
 {
     internal class WeatherProbeApplication : PageApplication
     {
+		protected override int GetEntriesPerPage<T>(T[] entries)
+		{
+            return 12;
+		}
         public override void Initialization()
         {
             SelectableLevel[] levels = StartOfRound.Instance.levels.Where(x => x.randomWeathers.Length > 0).ToArray();
