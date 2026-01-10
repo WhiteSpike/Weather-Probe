@@ -9,7 +9,7 @@ using WeatherProbe.Util;
 
 namespace WeatherProbe.Misc.UI.Application
 {
-    internal class WeatherProbeApplication : PageApplication
+    internal class WeatherProbeApplication : PageApplication<CursorElement>
     {
 		protected override int GetEntriesPerPage<T>(T[] entries)
 		{
@@ -18,18 +18,18 @@ namespace WeatherProbe.Misc.UI.Application
         public override void Initialization()
         {
             SelectableLevel[] levels = StartOfRound.Instance.levels.Where(x => x.randomWeathers.Length > 0).ToArray();
-            (SelectableLevel[][], CursorMenu[], IScreen[]) entries = GetPageEntries(levels);
+            (SelectableLevel[][], BaseCursorMenu<CursorElement>[], IScreen[]) entries = GetPageEntries(levels);
 
             SelectableLevel[][] pagesLevels = entries.Item1;
-            CursorMenu[] cursorMenus = entries.Item2;
+            BaseCursorMenu<CursorElement>[] cursorMenus = entries.Item2;
             IScreen[] screens = entries.Item3;
 
             for (int i = 0; i < pagesLevels.Length; i++)
             {
                 SelectableLevel[] levelList = pagesLevels[i];
                 CursorElement[] elements = new CursorElement[levelList.Length];
-                cursorMenus[i] = CursorMenu.Create(startingCursorIndex: 0, elements: elements);
-                CursorMenu cursorMenu = cursorMenus[i];
+                cursorMenus[i] = CursorMenu<CursorElement>.Create(startingCursorIndex: 0, elements: elements);
+                BaseCursorMenu<CursorElement> cursorMenu = cursorMenus[i];
                 ITextElement[] textElements =
                     [
                         TextElement.Create(text: Constants.MAIN_WEATHER_PROBE_TOP_TEXT),
@@ -54,7 +54,7 @@ namespace WeatherProbe.Misc.UI.Application
             RandomWeatherWithVariables[] possibleWeathers = level.randomWeathers.Where(x => x.weatherType != level.currentWeather).ToArray();
             CursorElement[] elements = new CursorElement[possibleWeathers.Length+3];
 
-            CursorMenu cursorMenu = new CursorMenu()
+            CursorMenu<CursorElement> cursorMenu = new CursorMenu<CursorElement>()
             {
                 elements = elements,
             };
@@ -178,7 +178,7 @@ namespace WeatherProbe.Misc.UI.Application
                 Name = "Exit",
                 Action = PreviousScreen()
             };
-            CursorMenu cursorMenu = new CursorMenu()
+            CursorMenu<CursorElement> cursorMenu = new CursorMenu<CursorElement>()
             {
                 elements = [exit]
             };
@@ -220,7 +220,7 @@ namespace WeatherProbe.Misc.UI.Application
                 Name = "Exit",
                 Action = PreviousScreen()
             };
-            CursorMenu cursorMenu = new CursorMenu()
+            CursorMenu<CursorElement> cursorMenu = new CursorMenu<CursorElement>()
             {
                 elements = [exit]
             };
