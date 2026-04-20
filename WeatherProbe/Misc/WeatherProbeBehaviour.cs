@@ -7,8 +7,11 @@ namespace WeatherProbe.Misc
     public class WeatherProbeBehaviour : NetworkBehaviour
     {
         internal const string COMMAND_NAME = "Weather Probe";
+
+        internal const string PURCHASED_KEY = "PurchasedProbe";
         internal static WeatherProbeBehaviour Instance { get; set; }
         internal readonly static Dictionary<string, LevelWeatherType> probedWeathers = [];
+        internal bool purchasedModule = false;
         static void SetInstance(WeatherProbeBehaviour instance )
         {
             Instance = instance;
@@ -17,6 +20,32 @@ namespace WeatherProbe.Misc
         {
             SetInstance(this);
             DontDestroyOnLoad(gameObject);
+            if (ES3.KeyExists(PURCHASED_KEY, GameNetworkManager.Instance.currentSaveFileName))
+            {
+                purchasedModule = ES3.Load(PURCHASED_KEY, GameNetworkManager.Instance.currentSaveFileName, false);
+            }
+            else
+            {
+                ES3.Save(PURCHASED_KEY, false, GameNetworkManager.Instance.currentSaveFileName);
+            }
+            SetPurchasedModuleClientRpc(purchasedModule);
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        internal void PurchaseModuleServerRpc()
+        {
+            if (purchasedModule)
+            {
+                Plugin.mls.LogWarning("The module was already purchased and yet received a purchase module request...");
+                return;
+            }
+            ES3.Save(PURCHASED_KEY, true, GameNetworkManager.Instance.currentSaveFileName);
+			SetPurchasedModuleClientRpc(true);
+        }
+        [ClientRpc]
+        internal void SetPurchasedModuleClientRpc(bool toggle)
+        {
+            this.purchasedModule = toggle;
         }
         [ServerRpc(RequireOwnership = false)]
         internal void SyncWeatherServerRpc(string level, LevelWeatherType selectedWeather)

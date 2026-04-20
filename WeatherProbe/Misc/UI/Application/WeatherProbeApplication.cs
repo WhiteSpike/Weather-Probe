@@ -1,6 +1,7 @@
 ﻿using InteractiveTerminalAPI.UI;
 using InteractiveTerminalAPI.UI.Application;
 using InteractiveTerminalAPI.UI.Cursor;
+using InteractiveTerminalAPI.UI.Page;
 using InteractiveTerminalAPI.UI.Screen;
 using System;
 using System.Linq;
@@ -17,6 +18,35 @@ namespace WeatherProbe.Misc.UI.Application
 		}
         public override void Initialization()
         {
+            if (!WeatherProbeBehaviour.Instance.purchasedModule && Plugin.Config.InitialPurchasePrice.Value > 0)
+            {
+				CursorElement[] elements =
+				[
+					CursorElement.Create(name: "Purchase module",active: (node) => CanPurchaseModule(node), action: () => PurchaseModule()),
+                    CursorElement.Create(name: "Exit", action: () => UnityEngine.Object.Destroy(InteractiveTerminalManager.Instance))
+				];
+				CursorMenu<CursorElement> cursorMenu = CursorMenu<CursorElement>.Create(startingCursorIndex: 0, elements: elements);
+				IScreen screen = new BoxedScreen()
+				{
+					Title = Constants.MAIN_WEATHER_PROBE_SCREEN_TITLE,
+					elements =
+					[
+						new TextElement()
+						{
+							Text = $"Weather Probe module is currently unoperational due to several infractions caused by current crew.\nHowever, with a 'purchase' of {Plugin.Config.InitialPurchasePrice.Value} Company Credits, all infractions will be pardoned and the module will be unlocked.",
+						},
+						new TextElement()
+						{
+							Text = " "
+						},
+						cursorMenu
+					]
+				};
+				currentPage = PageCursorElement<CursorElement>.Create(startingPageIndex: 0, elements: [screen], cursorMenus: [cursorMenu]);
+				currentCursorMenu = cursorMenu;
+				currentScreen = screen;
+				return;
+			}
             SelectableLevel[] levels = StartOfRound.Instance.levels.Where(x => x.randomWeathers.Length > 0).ToArray();
             (SelectableLevel[][], BaseCursorMenu<CursorElement>[], IScreen[]) entries = GetPageEntries(levels);
 
@@ -49,9 +79,48 @@ namespace WeatherProbe.Misc.UI.Application
             currentCursorMenu = initialPage.GetCurrentCursorMenu();
             currentScreen = initialPage.GetCurrentScreen();
         }
+
+		private bool CanPurchaseModule(CursorElement node)
+		{
+			int groupCredits = Tools.GetTerminal().groupCredits;
+            return groupCredits >= Plugin.Config.InitialPurchasePrice;
+		}
+
+		void PurchaseModule()
+        {
+            int groupCredits = Tools.GetTerminal().groupCredits;
+			terminal.groupCredits -= Plugin.Config.InitialPurchasePrice;
+			terminal.SyncGroupCreditsServerRpc(terminal.groupCredits, numItemsInShip: terminal.numberOfItemsInDropship);
+            WeatherProbeBehaviour.Instance.PurchaseModuleServerRpc();
+			CursorElement exit = new CursorElement()
+			{
+				Name = "Exit",
+				Action = () => UnityEngine.Object.Destroy(InteractiveTerminalManager.Instance)
+			};
+			CursorMenu<CursorElement> cursorMenu = new CursorMenu<CursorElement>()
+			{
+				elements = [exit]
+			};
+			IScreen screen = new BoxedScreen()
+			{
+				Title = Constants.MAIN_WEATHER_PROBE_SCREEN_TITLE,
+				elements = [
+						new TextElement()
+						{
+							Text = "Your 'purchase' has been successfully transfered.\nYour module is now available for usage, just need to use the command again.\n(Do not speak of this interaction to anyone)",
+						},
+						new TextElement()
+						{
+							Text = " "
+						},
+						cursorMenu
+					]
+			};
+			SwitchScreen(screen, cursorMenu, false);
+		}
         void SelectedPlanet(SelectableLevel level, Action cancelAction)
         {
-            RandomWeatherWithVariables[] possibleWeathers = level.randomWeathers.Where(x => x.weatherType != level.currentWeather).ToArray();
+            RandomWeatherWithVariables[] possibleWeathers = level.randomWeathers.Where(x => x.weatherType != level.currentWeather && !IsBlacklisted(x.weatherType)).ToArray();
             CursorElement[] elements = new CursorElement[possibleWeathers.Length+3];
 
             CursorMenu<CursorElement> cursorMenu = new CursorMenu<CursorElement>()
@@ -92,7 +161,7 @@ namespace WeatherProbe.Misc.UI.Application
                     {
                         BeforeChangeWeather(level, weather.weatherType);
                     },
-                    Active = (x) => CanSelectWeather(level, weather.weatherType, Plugin.Config.SPECIFIED_PRICE.Value),
+                    Active = (x) => CanSelectWeather(level, weather.weatherType, GetWeatherSpecifiedPriceFromConfiguration(weather.weatherType)),
                 };
 
             }
@@ -103,7 +172,7 @@ namespace WeatherProbe.Misc.UI.Application
                 {
                     BeforeChangeWeather(level, LevelWeatherType.None);
                 },
-                Active = (x) => CanSelectWeather(level, LevelWeatherType.None, Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : Plugin.Config.SPECIFIED_PRICE.Value),
+                Active = (x) => CanSelectWeather(level, LevelWeatherType.None, Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : GetWeatherSpecifiedPriceFromConfiguration(LevelWeatherType.None)),
             };
             if (!Plugin.Config.RANDOM_ALWAYS_CLEAR)
             {
@@ -133,6 +202,45 @@ namespace WeatherProbe.Misc.UI.Application
             }
             SwitchScreen(screen, cursorMenu, true);
         }
+
+		bool IsBlacklisted(LevelWeatherType weatherType)
+		{
+            string weatherName = GetWeatherName(weatherType);
+			string[] blacklistedWeathers = Plugin.Config.BlacklistWeathers.Value.Split(PluginConfig.BlacklistWeatherDelimiter);
+            for(int i = 0; i < blacklistedWeathers.Length; i++)
+            {
+                string blacklistedWeather = blacklistedWeathers[i];
+                if (weatherName.Equals(blacklistedWeather, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+		}
+
+        static string GetWeatherName(LevelWeatherType weather)
+        {
+			switch (weather)
+			{
+				case LevelWeatherType.None: // Clear or no weather
+					{
+                        return "Clear";
+					}
+                default: return weather.ToString();
+			}
+		}
+
+
+		static int GetWeatherSpecifiedPriceFromConfiguration(LevelWeatherType weather)
+		{
+            string weatherName = GetWeatherName(weather);
+			string[] weatherPrices = Plugin.Config.WeathersPrice.Value.Split(PluginConfig.IndividualWeatherDelimiter);
+			for (int i = 0; i < weatherPrices.Length; i++)
+			{
+				string[] weatherPairing = weatherPrices[i].Trim().Split(PluginConfig.IndividualWeatherPriceDelimiter);
+				string weatherPairingName = weatherPairing[0];
+				if (!weatherName.Equals(weatherPairingName, StringComparison.OrdinalIgnoreCase)) continue;
+				return int.Parse(weatherPairing[1]);
+			}
+			return Plugin.Config.SPECIFIED_PRICE;
+		}
         static bool CanSelectRandomWeather(RandomWeatherWithVariables[] weathers, int price)
         {
             int groupCredits = Tools.GetTerminal().groupCredits;
@@ -151,7 +259,8 @@ namespace WeatherProbe.Misc.UI.Application
         void BeforeChangeWeather(SelectableLevel level, LevelWeatherType type)
         {
             int groupCredits = terminal.groupCredits;
-            if (groupCredits < Plugin.Config.SPECIFIED_PRICE.Value)
+			int price = type == LevelWeatherType.None && Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : GetWeatherSpecifiedPriceFromConfiguration(type);
+			if (groupCredits < price)
             {
                 ErrorMessage(level.PlanetName, PreviousScreen(), Constants.NOT_ENOUGH_CREDITS_SPECIFIED_PROBE);
                 return;
@@ -163,14 +272,13 @@ namespace WeatherProbe.Misc.UI.Application
                 ErrorMessage(level.PlanetName, PreviousScreen(), string.Format(Constants.SAME_WEATHER_FORMAT, level.PlanetName, type == LevelWeatherType.None ? "clear" : type));
                 return;
             }
-            int price = type == LevelWeatherType.None && Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : Plugin.Config.SPECIFIED_PRICE.Value;
 
             Confirm(level.PlanetName, string.Format(Constants.CONFIRM_WEATHER_FORMAT, level.PlanetName, type, price), () => ChangeWeather(level, type), PreviousScreen());
         }
         void ChangeWeather(SelectableLevel level, LevelWeatherType weatherType)
         {
-            int price = weatherType == LevelWeatherType.None && Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : Plugin.Config.SPECIFIED_PRICE.Value;
-            terminal.groupCredits -= price;
+            int price = weatherType == LevelWeatherType.None && Plugin.Config.RANDOM_ALWAYS_CLEAR ? Plugin.Config.RANDOM_PRICE.Value : GetWeatherSpecifiedPriceFromConfiguration(weatherType);
+			terminal.groupCredits -= price;
             terminal.SyncGroupCreditsServerRpc(terminal.groupCredits, numItemsInShip: terminal.numberOfItemsInDropship);
             WeatherProbeBehaviour.Instance.SyncWeatherServerRpc(level.PlanetName, weatherType);
             CursorElement exit = new CursorElement()
